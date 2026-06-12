@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>おかあさんへの伝言板</title>
+    <style>
+        body {
+            background-color: #000000; /* 目に優しい黒背景 */
+            color: #FFFF00;           /* 見えやすい黄色文字 */
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 48px;          /* 超巨大文字 */
+            padding: 20px;
+            margin: 0;
+            text-align: center;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        #status {
+            font-size: 24px;
+            color: #888888;
+            margin-bottom: 20px;
+            background: #222;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        #result {
+            min-height: 300px;
+            word-wrap: break-word;
+            line-height: 1.6;
+            text-align: left; /* 左詰めのほうが長文を読みやすいため */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="status">【ここをタップすると始まります】</div>
+    <div id="result">お母様へ：ここに文字が大きく出ます。</div>
+
+    <script>
+        // iOS（iPhone）とAndroid両対応のためのプレフィックス処理
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (!SpeechRecognition) {
+            document.getElementById('status').innerText = "お使いのブラウザ・アプリは音声認識に対応していません。SafariかChromeで開いてください。";
+        } else {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'ja-JP';
+            
+            // iOSの不具合を避けるため、あえてcontinuousはfalseにし、終了時に自動再起動させるハイブリッド方式にします
+            recognition.continuous = false; 
+            recognition.interimResults = true; // 話し中の文字もリアルタイムに表示
+
+            const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
+            
+            let isListening = false;
+            let finalResult = ""; // 確定した文字をためる変数
+
+            // 画面タップで開始・停止を切り替え
+            document.body.onclick = () => {
+                if (!isListening) {
+                    finalResult = ""; // 新しく始めるときはクリア
+                    recognition.start();
+                } else {
+                    recognition.stop();
+                }
+            };
+
+            recognition.onstart = () => {
+                isListening = true;
+                statusDiv.innerText = "● 聞いています（お話しください）";
+                statusDiv.style.color = "#FF3B30"; // 録音中っぽい赤
+                statusDiv.style.background = "#331111";
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalResult += event.results[i][0].transcript + "\n"; // 確定したら改行を入れる
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                // 画面表示（確定した文章 ＋ いま話してる途中の文字）
+                resultDiv.innerText = finalResult + interimTranscript;
+            };
+
+            recognition.onerror = (event) => {
+                // 音声が聞き取れなかった場合のエラー（no-speech）などは無視して裏で再開させる
+                if (event.error !== 'no-speech') {
+                    console.log("Speech recognition error", event.error);
+                }
+            };
+
+            recognition.onend = () => {
+                // iPhoneで途切れずに聞き取り続けるための最重要トリック：
+                // ユーザーが意図して止めていない場合は、即座に聞き取りを自動再開する
+                if (isListening) {
+                    recognition.start();
+                } else {
+                    statusDiv.innerText = "【休憩中：タップで再開】";
+                    statusDiv.style.color = "#FFFF00";
+                    statusDiv.style.background = "#222";
+                }
+            };
+        }
+    </script>
+</body>
+</html>

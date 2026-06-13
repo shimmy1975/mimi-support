@@ -33,7 +33,7 @@ body {
     border-radius: 10px;
     border: none;
     font-weight: bold;
-    white-space: nowrap; /* ✅ 改行防止 */
+    white-space: nowrap;
 }
 
 #easyStart { background: #00C853; color: white; }
@@ -82,6 +82,7 @@ body {
     right: 0;
     overflow-y: auto;
     padding: 16px;
+    box-sizing: border-box;
 }
 
 /* ===== テキスト ===== */
@@ -97,7 +98,7 @@ body {
 
 <body>
 
-<!-- ✅ 上部ボタン -->
+<!-- 上部 -->
 <div id="topControls">
     <button id="easyStart">▶ 会話スタート</button>
     <button id="easyStop">■ 終了（休憩）</button>
@@ -105,12 +106,12 @@ body {
 
 <div id="status">準備OK</div>
 
-<!-- ✅ スクロールエリア -->
+<!-- 本文 -->
 <div id="content">
     <div id="result">ここに表示されます</div>
 </div>
 
-<!-- ✅ 下部ボタン -->
+<!-- 下部 -->
 <div id="bottomControls">
     <button id="scrollBtn">▼ 最下部へ</button>
 </div>
@@ -123,19 +124,35 @@ let isUserScrolling = false;
 
 const content = document.getElementById('content');
 
-// ✅ ユーザー操作のみでスクロールOFF
+// ✅ 最下部判定
+function isNearBottom() {
+    const threshold = 30;
+    return (
+        content.scrollHeight - content.scrollTop - content.clientHeight < threshold
+    );
+}
+
+// ✅ スクロール時の制御（今回の核心）
+content.addEventListener("scroll", () => {
+    if (isNearBottom()) {
+        autoScrollEnabled = true;   // ✅ 最下部で自動復帰
+    } else {
+        autoScrollEnabled = false;  // ✅ 上にいる間は停止
+    }
+});
+
+// ✅ ユーザー操作検知
 content.addEventListener("touchstart", () => {
     isUserScrolling = true;
-    autoScrollEnabled = false;
 });
 
 content.addEventListener("touchend", () => {
     setTimeout(() => {
         isUserScrolling = false;
-    }, 1500);
+    }, 500);
 });
 
-// ✅ 自動スクロール（正常版）
+// ✅ 自動スクロール
 function autoScroll() {
     if (autoScrollEnabled && !isUserScrolling) {
         content.scrollTop = content.scrollHeight;
@@ -178,7 +195,7 @@ if (!SpeechRecognition) {
     easyStart.onclick = startListening;
     easyStop.onclick = stopListening;
 
-    // ✅ 最下部ボタン（＋自動復帰）
+    // ✅ 最下部ボタン
     scrollBtn.onclick = () => {
         autoScrollEnabled = true;
         isUserScrolling = false;

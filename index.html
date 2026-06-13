@@ -27,11 +27,13 @@ body {
 
 #topControls button {
     flex: 1;
-    font-size: 24px;
-    padding: 15px;
+    min-width: 0;
+    font-size: 20px;          /* ← 少し小さく */
+    padding: 12px;            /* ← 少し詰める */
     border-radius: 10px;
     border: none;
     font-weight: bold;
+    white-space: nowrap;      /* ← 改行禁止（これが一番重要） */
 }
 
 #easyStart { background: #00C853; color: white; }
@@ -96,8 +98,8 @@ body {
 
 <!-- ✅ 上部ボタン -->
 <div id="topControls">
-    <button id="easyStart">▶ 会話スタート</button>
-    <button id="easyStop">■ 終了（休憩）</button>
+    <button id="easyStart">▶スタート</button>
+    <button id="easyStop">■ 終了</button>
 </div>
 
 <div id="status">準備OK</div>

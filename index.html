@@ -33,6 +33,29 @@ body {
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+let isUserScrolling = false;
+
+// ✅ ユーザー操作検知
+window.addEventListener("touchstart", () => {
+    isUserScrolling = true;
+});
+
+window.addEventListener("touchend", () => {
+    setTimeout(() => {
+        isUserScrolling = false;
+    }, 2000);
+});
+
+// ✅ 自動スクロール
+function autoScroll() {
+    if (!isUserScrolling) {
+        window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: "smooth"
+        });
+    }
+}
+
 if (!SpeechRecognition) {
     document.getElementById('status').innerText = "非対応ブラウザ";
 } else {
@@ -62,7 +85,6 @@ if (!SpeechRecognition) {
         status.innerText = "● 聞き取り中";
     };
 
-    // ✅ 安全な要約（バグらない版）
     function summarize(text) {
         return text
             .replace(/えー|あのー|えっと|そのー|なんか/g, "")
@@ -84,7 +106,13 @@ if (!SpeechRecognition) {
             }
         }
 
-        result.innerText = summarize(finalText) + "\n\n" + interim;
+        result.innerText =
+            summarize(finalText) +
+            "\n\n---聞き取り中---\n" +
+            interim;
+
+        // ✅ 自動スクロール発動
+        autoScroll();
     };
 
     recognition.onend = () => {

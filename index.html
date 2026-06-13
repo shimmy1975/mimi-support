@@ -1,25 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ミミサポ</title>
+
+<style>
+body {
+    background: #000;
+    color: #FFFF00;
+    font-size: 42px;
+    font-weight: bold;
+    margin: 0;
+    padding: 20px;
+}
+#status {
+    font-size: 20px;
+    color: #aaa;
+    margin-bottom: 15px;
+}
+#result {
+    white-space: pre-wrap;
+}
+</style>
+</head>
+
+<body>
+
+<div id="status">タップで開始</div>
+<div id="result">ここに表示されます</div>
+
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 if (!SpeechRecognition) {
-    document.getElementById('status').innerText = "対応していません";
+    document.getElementById('status').innerText = "非対応ブラウザ";
 } else {
     const recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
-    recognition.continuous = false;
     recognition.interimResults = true;
-
-    const statusDiv = document.getElementById('status');
-    const resultDiv = document.getElementById('result');
+    recognition.continuous = false;
 
     let isListening = false;
-    let finalResult = "";
+    let finalText = "";
 
-    const MAX_CHARS = 500; // 強制区切り
+    const status = document.getElementById('status');
+    const result = document.getElementById('result');
 
     document.body.onclick = () => {
         if (!isListening) {
-            finalResult = "";
+            finalText = "";
             recognition.start();
         } else {
             isListening = false;
@@ -29,106 +59,43 @@ if (!SpeechRecognition) {
 
     recognition.onstart = () => {
         isListening = true;
-        statusDiv.innerText = "● 聞いています";
+        status.innerText = "● 聞き取り中";
     };
 
-    // ✅ 高精度 擬似要約関数
-    function summarizeText(text) {
-
-        // ① フィラー削除（強化）
-        let cleaned = text
-            .replace(/(えー+|あのー+|えっと|そのー?|なんか|まあ|ていうか|というか|うーん|ええと)/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-
-        // ② 文分割
-        let sentences = cleaned.split(/[。！？\n]/)
-            .map(s => s.trim())
-            .filter(s => s.length > 5);
-
-        // ③ 重複削除（前後比較）
-        let unique = [];
-        for (let s of sentences) {
-            if (!unique.some(u => similarity(u, s) > 0.8)) {
-                unique.push(s);
-            }
-        }
-
-        // ④ スコア計算（雑なAIっぽさ）
-        let scored = unique.map(s => ({
-            text: s,
-            score: s.length + keywordBoost(s)
-        }));
-
-        // ⑤ スコア順
-        scored.sort((a, b) => b.score - a.score);
-
-        // ⑥ 上位抽出（最大5行）
-        let top = scored.slice(0, 5).map(s => "・" + s.text);
-
-        return top.join("\n");
+    // ✅ 安全な要約（バグらない版）
+    function summarize(text) {
+        return text
+            .replace(/えー|あのー|えっと|そのー|なんか/g, "")
+            .split(/[。\n]/)
+            .filter(s => s.length > 5)
+            .slice(-5)
+            .map(s => "・" + s.trim())
+            .join("\n");
     }
 
-    // ✅ キーワード強調（業務会話向け）
-    function keywordBoost(s) {
-        const keywords = [
-            "重要","必要","問題","確認","対応","結論",
-            "スケジュール","今日","明日","決定","会議"
-        ];
-        let score = 0;
-        keywords.forEach(k => {
-            if (s.includes(k)) score += 10;
-        });
-        return score;
-    }
+    recognition.onresult = (e) => {
+        let interim = "";
 
-    // ✅ 簡易類似度（重複排除）
-    function similarity(a, b) {
-        let shorter = a.length < b.length ? a : b;
-        let longer = a.length >= b.length ? a : b;
-        let common = 0;
-        for (let c of shorter) {
-            if (longer.includes(c)) common++;
-        }
-        return common / longer.length;
-    }
-
-    recognition.onresult = (event) => {
-        let interim = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-                finalResult += event.results[i][0].transcript + "\n";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            if (e.results[i].isFinal) {
+                finalText += e.results[i][0].transcript + "\n";
             } else {
-                interim += event.results[i][0].transcript;
+                interim += e.results[i][0].transcript;
             }
         }
 
-        // ✅ 強制カット（エラー防止）
-        if (finalResult.length > MAX_CHARS) {
-            finalResult = finalResult.slice(-MAX_CHARS);
-        }
-
-        const summarized = summarizeText(finalResult);
-
-        resultDiv.innerText =
-            summarized +
-            "\n\n--- 聞き取り中 ---\n" +
-            interim;
-    };
-
-    recognition.onerror = (event) => {
-        if (event.error !== 'no-speech') {
-            console.log(event.error);
-        }
+        result.innerText = summarize(finalText) + "\n\n" + interim;
     };
 
     recognition.onend = () => {
         if (isListening) {
             recognition.start();
         } else {
-            statusDiv.innerText = "タップで再開";
+            status.innerText = "タップで再開";
         }
     };
 }
 </script>
+
+</body>
+</html>

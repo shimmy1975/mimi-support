@@ -1,112 +1,134 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>目で見る会話／ミミサポ</title>
-    <style>
-        body {
-            background-color: #000000; /* 目に優しい黒背景 */
-            color: #FFFF00;           /* 見えやすい黄色文字 */
-            font-family: sans-serif;
-            font-weight: bold;
-            font-size: 48px;          /* 超巨大文字 */
-            padding: 20px;
-            margin: 0;
-            text-align: center;
-            height: 100vh;
-            box-sizing: border-box;
-        }
-        #status {
-            font-size: 24px;
-            color: #888888;
-            margin-bottom: 20px;
-            background: #222;
-            padding: 10px;
-            border-radius: 10px;
-        }
-        #result {
-            min-height: 300px;
-            word-wrap: break-word;
-            line-height: 1.6;
-            text-align: left; /* 左詰めのほうが長文を読みやすいため */
-        }
-    </style>
-</head>
-<body>
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    <div id="status">【ここをタップすると始まります】</div>
-    <div id="result">お袋へ：ここに文字が大きく出ます。</div>
+if (!SpeechRecognition) {
+    document.getElementById('status').innerText = "対応していません";
+} else {
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = false;
+    recognition.interimResults = true;
 
-    <script>
-        // iOS（iPhone）とAndroid両対応のためのプレフィックス処理
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        
-        if (!SpeechRecognition) {
-            document.getElementById('status').innerText = "お使いのブラウザ・アプリは音声認識に対応していません。SafariかChromeで開いてください。";
+    const statusDiv = document.getElementById('status');
+    const resultDiv = document.getElementById('result');
+
+    let isListening = false;
+    let finalResult = "";
+
+    const MAX_CHARS = 500; // 強制区切り
+
+    document.body.onclick = () => {
+        if (!isListening) {
+            finalResult = "";
+            recognition.start();
         } else {
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'ja-JP';
-            
-            // iOSの不具合を避けるため、あえてcontinuousはfalseにし、終了時に自動再起動させるハイブリッド方式にします
-            recognition.continuous = false; 
-            recognition.interimResults = true; // 話し中の文字もリアルタイムに表示
-
-            const statusDiv = document.getElementById('status');
-            const resultDiv = document.getElementById('result');
-            
-            let isListening = false;
-            let finalResult = ""; // 確定した文字をためる変数
-
-            // 画面タップで開始・停止を切り替え
-            document.body.onclick = () => {
-                if (!isListening) {
-                    finalResult = ""; // 新しく始めるときはクリア
-                    recognition.start();
-                } else {
-                    recognition.stop();
-                }
-            };
-
-            recognition.onstart = () => {
-                isListening = true;
-                statusDiv.innerText = "● 聞いています（お話しください）";
-                statusDiv.style.color = "#FF3B30"; // 録音中っぽい赤
-                statusDiv.style.background = "#331111";
-            };
-
-            recognition.onresult = (event) => {
-                let interimTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) {
-                        finalResult += event.results[i][0].transcript + "\n"; // 確定したら改行を入れる
-                    } else {
-                        interimTranscript += event.results[i][0].transcript;
-                    }
-                }
-                // 画面表示（確定した文章 ＋ いま話してる途中の文字）
-                resultDiv.innerText = finalResult + interimTranscript;
-            };
-
-            recognition.onerror = (event) => {
-                // 音声が聞き取れなかった場合のエラー（no-speech）などは無視して裏で再開させる
-                if (event.error !== 'no-speech') {
-                    console.log("Speech recognition error", event.error);
-                }
-            };
-
-            recognition.onend = () => {
-                // iPhoneで途切れずに聞き取り続けるための最重要トリック：
-                // ユーザーが意図して止めていない場合は、即座に聞き取りを自動再開する
-                if (isListening) {
-                    recognition.start();
-                } else {
-                    statusDiv.innerText = "【休憩中：タップで再開】";
-                    statusDiv.style.color = "#FFFF00";
-                    statusDiv.style.background = "#222";
-                }
-            };
+            isListening = false;
+            recognition.stop();
         }
-    </script>
-</body>
-</html>
+    };
+
+    recognition.onstart = () => {
+        isListening = true;
+        statusDiv.innerText = "● 聞いています";
+    };
+
+    // ✅ 高精度 擬似要約関数
+    function summarizeText(text) {
+
+        // ① フィラー削除（強化）
+        let cleaned = text
+            .replace(/(えー+|あのー+|えっと|そのー?|なんか|まあ|ていうか|というか|うーん|ええと)/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        // ② 文分割
+        let sentences = cleaned.split(/[。！？\n]/)
+            .map(s => s.trim())
+            .filter(s => s.length > 5);
+
+        // ③ 重複削除（前後比較）
+        let unique = [];
+        for (let s of sentences) {
+            if (!unique.some(u => similarity(u, s) > 0.8)) {
+                unique.push(s);
+            }
+        }
+
+        // ④ スコア計算（雑なAIっぽさ）
+        let scored = unique.map(s => ({
+            text: s,
+            score: s.length + keywordBoost(s)
+        }));
+
+        // ⑤ スコア順
+        scored.sort((a, b) => b.score - a.score);
+
+        // ⑥ 上位抽出（最大5行）
+        let top = scored.slice(0, 5).map(s => "・" + s.text);
+
+        return top.join("\n");
+    }
+
+    // ✅ キーワード強調（業務会話向け）
+    function keywordBoost(s) {
+        const keywords = [
+            "重要","必要","問題","確認","対応","結論",
+            "スケジュール","今日","明日","決定","会議"
+        ];
+        let score = 0;
+        keywords.forEach(k => {
+            if (s.includes(k)) score += 10;
+        });
+        return score;
+    }
+
+    // ✅ 簡易類似度（重複排除）
+    function similarity(a, b) {
+        let shorter = a.length < b.length ? a : b;
+        let longer = a.length >= b.length ? a : b;
+        let common = 0;
+        for (let c of shorter) {
+            if (longer.includes(c)) common++;
+        }
+        return common / longer.length;
+    }
+
+    recognition.onresult = (event) => {
+        let interim = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                finalResult += event.results[i][0].transcript + "\n";
+            } else {
+                interim += event.results[i][0].transcript;
+            }
+        }
+
+        // ✅ 強制カット（エラー防止）
+        if (finalResult.length > MAX_CHARS) {
+            finalResult = finalResult.slice(-MAX_CHARS);
+        }
+
+        const summarized = summarizeText(finalResult);
+
+        resultDiv.innerText =
+            summarized +
+            "\n\n--- 聞き取り中 ---\n" +
+            interim;
+    };
+
+    recognition.onerror = (event) => {
+        if (event.error !== 'no-speech') {
+            console.log(event.error);
+        }
+    };
+
+    recognition.onend = () => {
+        if (isListening) {
+            recognition.start();
+        } else {
+            statusDiv.innerText = "タップで再開";
+        }
+    };
+}
+</script>
